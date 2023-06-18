@@ -1,0 +1,146 @@
+node {
+    
+    def ARTIFACTS_STAGING_PATH = "C:\\Users\\admin\\Desktop\\Sonar\\Staging_Artifacts"
+    def SUITE_FILES_PATH = "C:\\Users\\admin\\.jenkins\\workspace\\Devops_CI_CD_Pipeline_UAT\\src\\main\\resources"
+    def ARTIFACTS_SOURCE_PATH = "C:\\Users\\admin\\.jenkins\\workspace\\Devops_CI_CD_Pipeline_UAT\\target"
+    def server = Artifactory.newServer url: 'https://cloudfire.jfrog.io/', username: 'cloudfiretechnologies@gmail.com', password: 'Welcome@01'
+    
+        stage('checkout'){
+  
+  
+       checkout([
+        $class: 'GitSCM', 
+        branches: [[name: '*/main']], 
+        doGenerateSubmoduleConfigurations: false, 
+        extensions: [[$class: 'CleanCheckout']], 
+        submoduleCfg: [], 
+        userRemoteConfigs: [[credentialsId: 'JENKINS_GIT_ID', url: 'https://gitlab.com/cloudfire1/automation_ci_cd_project.git']]
+		
+		 ]) 
+   
+  
+        
+    }
+    
+    
+    
+     stage('Compile'){
+  
+  dir('C:\\Users\\admin\\.jenkins\\workspace\\Devops_CI_CD_Pipeline_UAT\\'){
+  
+  try {
+     bat 'mvn clean compile'
+  } catch (e) {
+       emailext (
+           
+            to: "cloudfiretechnologies@gmail.com",
+           
+            subject: 'Compile STages in Devops CI/CD Pipeline is ::::: currentBuild.currentResult + " : " + env.JOB_NAME'
+            
+        )
+      
+  }
+  
+    
+      }
+  }
+    
+    stage('Build'){
+         dir('C:\\Users\\admin\\.jenkins\\workspace\\Devops_CI_CD_Pipeline_UAT\\'){
+      bat 'mvn clean install'
+         }
+        
+    }
+    
+     stage('codeQualityAnalysis::SonarQube'){
+  
+  // groovy
+  
+     def scannerHome = tool 'SonarScanner'; 
+
+	 
+     withSonarQubeEnv('SonarQubeServer') { 
+        // If you have configured more than one global server connection, you can specify its name
+      bat "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=devops_final_pro -Dsonar.projectName='devops_final_pro' -Dsonar.host.url=http://localhost:9000 -Dsonar.token=sqp_a08793796833e8dfb0b1ec8b6e6b755d8d90edfb -Dsonar.exclusions=**/*.java"
+  
+  
+  
+      
+       
+    }
+  }
+  
+  
+      stage('Quality Gates'){
+	
+	
+    sleep(200)
+timeout(time: 1, unit: 'MINUTES') {
+    def qg = waitForQualityGate()               
+    print "Finished waiting"
+	
+	
+    if (qg.status != 'OK') {
+        error "Pipeline aborted due to quality gate failure: ${qg.status}"
+    }
+	
+
+}  
+      
+  }
+    
+    
+   
+   stage('Reports'){
+     publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'C:\\Users\\admin\\.jenkins\\workspace\\Devops_CI_CD_Pipeline_UAT\\target\\surefire-reports', reportFiles: 'index.html', reportName: 'HTML Report', reportTitles: 'Devops_HTML_Reports', useWrapperFileDirectly: true])  
+   }
+   
+   
+   
+    stage('Email'){
+        
+               dir("C:\\Users\\admin\\.jenkins\\workspace\\Devops_CI_CD_Pipeline_UAT\\target\\surefire-reports"){       
+ 
+ 
+ emailext (
+            mimeType: 'text/html',
+            to: "cloudfiretechnologies@gmail.com",
+            attachLog: true,
+            subject: 'Devops CI/ CD Pipeline',
+            body: readFile("emailable-report.html")
+        )         
+
+}
+        
+    }
+    
+    stage('Staging Artifacts'){
+        
+        bat "COPY ${ARTIFACTS_SOURCE_PATH}\\**.jar ${ARTIFACTS_STAGING_PATH}\\"
+        bat "COPY ${SUITE_FILES_PATH}\\**.xml ${ARTIFACTS_STAGING_PATH}\\"
+        
+    }
+
+stage('push Artifacts in JFrog Repo'){
+
+ def uploadSpec = """{
+  "files": [
+    {
+      "pattern": "C://Users//admin///Desktop//Sonar//Staging_Artifacts//*.jar",
+      "target": "artifactory/devops-generic-local/"
+    },
+                {
+                    "pattern": "C://Users//admin///Desktop//Sonar//Staging_Artifacts//*.xml",
+                    "target": "artifactory/devops-generic-local/",
+                    "recursive": "true",
+                    "flat": "false",
+                    "props": "Version=1"
+                }
+ ]
+}"""
+server.upload spec: uploadSpec, failNoOp: true
+
+}
+    
+    
+}

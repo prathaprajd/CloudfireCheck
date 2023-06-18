@@ -1,0 +1,50 @@
+node{
+    
+    stage('Download Artifacts :: jFrog Repo'){
+        
+        
+        dir("C:\\Users\\admin\\Desktop\\Sonar\\Prod_Deployment\\"){
+        
+        bat """curl -LO -u "cloudfiretechnologies@gmail.com:Welcome@01" -O https://cloudfire.jfrog.io/artifactory/devops-generic-local/devops_project-1.0.jar"""
+       
+         bat """curl -LO -u "cloudfiretechnologies@gmail.com:Welcome@01" -O https://cloudfire.jfrog.io/artifactory/devops-generic-local/testng.xml"""
+        }
+        
+    }
+    
+    stage('Deploy:prod'){
+        
+       dir("C:\\Users\\admin\\Desktop\\Sonar\\Prod_Deployment\\"){ 
+	   
+	   try {
+	   
+	  
+        bat "java -jar devops_project-1.0.jar"
+		
+		
+	
+       }
+       catch(Exception e){
+          	currentBuild.result='FAILURE' 
+       }
+    
+    
+}
+
+}
+
+
+       stage('E-Mail')
+        {
+            dir("C:\\Users\\admin\\Desktop\\Sonar\\Prod_Deployment\\test-output\\"){
+            env.ForEmailPlugin = env.WORKSPACE      
+            emailext attachmentsPattern: 'emailable-report.html',      
+            body: '''Automation CI/CD Prod Pipeline''', 
+            subject: currentBuild.currentResult + " : " + env.JOB_NAME, 
+            to: 'cloudfiretechnologies@gmail.com'
+            mimeType: 'text/html'
+        }
+        }
+
+
+}
